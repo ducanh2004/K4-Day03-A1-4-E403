@@ -1,0 +1,38 @@
+flowchart TD
+    U["Người dùng gửi yêu cầu"] --> G{"Preflight Guardrail"}
+    G -->|"PII hàng loạt / phân biệt đối xử"| R["Từ chối an toàn"]
+    G -->|"Yêu cầu hợp lệ"| C{"Phân loại yêu cầu"}
+
+    C -->|"Câu hỏi kiến thức đơn giản"| B["Chatbot Baseline"]
+    B --> B1["Một LLM call<br/>Không gọi tool"]
+    B1 --> F["Final Answer"]
+
+    C -->|"Cần dữ liệu / nhiều bước / hành động"| A["ReAct Agent V2"]
+    A --> L["LLM chọn Thought + Action"]
+    L --> P{"Parser V2"}
+
+    P -->|"Malformed Args"| O1["Observation lỗi + gợi ý cú pháp"]
+    O1 --> L
+    P -->|"Unknown Tool"| O2["Observation lỗi + danh sách tool hợp lệ"]
+    O2 --> L
+    P -->|"Action hợp lệ"| S{"Tool có side effect?"}
+
+    S -->|"Không"| T["Thực thi tool read-only"]
+    S -->|"Có"| X{"Người dùng xác nhận rõ ràng?"}
+    X -->|"Chưa"| R2["Không thực hiện<br/>Yêu cầu xác nhận"]
+    X -->|"Có"| T2["Đặt lịch / gửi thư"]
+
+    T --> O["Observation thật"]
+    T2 --> O
+    O --> E{"Đủ bằng chứng?"}
+    E -->|"Chưa"| D{"Action bị lặp hoặc hết MAX_ITERATIONS?"}
+    D -->|"Không"| L
+    D -->|"Có"| SF["Safe Fallback"]
+    E -->|"Đủ"| V{"Final Answer có grounding?"}
+    V -->|"Không"| R3["Chặn kết luận không có bằng chứng"]
+    V -->|"Có"| F
+
+    R --> F
+    R2 --> F
+    R3 --> F
+    SF --> F

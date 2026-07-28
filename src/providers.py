@@ -6,6 +6,7 @@ Hỗ trợ chuyển đổi linh hoạt giữa các nhà cung cấp AI chỉ bằ
 import os
 import sys
 import json
+import re
 import requests
 from dotenv import load_dotenv
 
@@ -132,12 +133,99 @@ class OpenRouterProvider(BaseLLMProvider):
 
 
 class MockProvider(BaseLLMProvider):
-    """Offline Mock Provider (Cho bài test không cần kết nối API)"""
+    """Provider nhỏ giả lập để kiểm tra router/fallback mà không cần API."""
     def generate(self, prompt: str, system_prompt: str = "") -> str:
         text = prompt.lower()
-        if "thời tiết" in text and "hà nội" in text:
-            return "Thought: Cần tra cứu thời tiết Hà Nội.\nAction: get_weather['Hà Nội']"
-        return "🤖 [Mock Provider]: Phản hồi giả lập offline cho bài test."
+        user_match = re.search(
+            r"<user_data>\s*(.*?)\s*</user_data>",
+            prompt,
+            re.IGNORECASE | re.DOTALL,
+        )
+        user_text = user_match.group(1) if user_match else prompt
+        user_lower = user_text.lower()
+        has_observation = "state:\nnone" not in text and (
+            "state:" in text or "observation:" in text
+        )
+
+        # Cố ý trả output đơn giản sau Observation. Application sẽ tổng hợp
+        # deterministic, giúp kiểm tra đường chạy dành cho model ít tham số.
+        if has_observation:
+            return "[small-model] done"
+
+        if any(
+            term in user_lower
+            for term in ("đã được nhận", "trúng tuyển", "100%")
+        ):
+            return (
+                "Final Answer: Tôi không thể quyết định ứng viên đã trúng tuyển. "
+                "Quyết định cuối cùng cần người có thẩm quyền."
+            )
+
+        if "mô tả" in user_lower and "vai trò" in user_lower:
+            return (
+                "Final Answer: Trợ lý sàng lọc đọc và tóm tắt CV, đối chiếu "
+                "tiêu chí công việc và hỗ trợ nhà tuyển dụng ra quyết định."
+            )
+        if "3 tiêu chí" in user_lower:
+            return (
+                "Final Answer: Ba tiêu chí chính là kỹ năng phù hợp, kinh nghiệm "
+                "liên quan và mức độ đáp ứng yêu cầu của vị trí."
+            )
+
+        if any(
+            term in user_lower
+            for term in ("phỏng vấn", "lịch hẹn", "khung giờ")
+        ):
+            date_match = re.search(r"\d{4}-\d{2}-\d{2}", user_text)
+            preferred_date = date_match.group(0) if date_match else ""
+            return json.dumps({
+                "tool": "check_slots",
+                "args": {"preferred_date": preferred_date},
+            }, ensure_ascii=False)
+
+        job_titles = (
+            "python developer",
+            "data analyst",
+            "data engineer",
+            "frontend developer",
+        )
+        job_title = next(
+            (title for title in job_titles if title in user_lower),
+            None,
+        )
+        skills = [
+            skill for skill in ("python", "sql", "git", "excel", "power bi",
+                                "javascript", "react", "docker", "backend")
+            if skill in user_lower
+        ]
+        years_match = re.search(r"(\d+)\s*năm", user_lower)
+        if job_title and skills and years_match:
+            return json.dumps({
+                "tool": "evaluate_cv",
+                "args": {
+                    "candidate_skills": skills,
+                    "experience_years": int(years_match.group(1)),
+                    "job_title": job_title,
+                },
+            }, ensure_ascii=False)
+        if job_title:
+            return json.dumps({
+                "tool": "job_requirements",
+                "args": {"job_title": job_title},
+            }, ensure_ascii=False)
+        if any(
+            term in user_lower
+            for term in ("ứng viên", "hồ sơ", "cv")
+        ):
+            return json.dumps({
+                "tool": "parse_cv",
+                "args": {"profile_text": user_text},
+            }, ensure_ascii=False)
+
+        return (
+            "Final Answer: Tôi có thể hỗ trợ sàng lọc hồ sơ, đối chiếu yêu cầu "
+            "công việc và kiểm tra lịch phỏng vấn."
+        )
 
 
 def get_llm_provider(provider_name: str = None) -> BaseLLMProvider:
