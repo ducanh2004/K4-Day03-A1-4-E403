@@ -18,6 +18,10 @@ JOB_REQUIREMENTS = {
         "required_skills": ["sql", "excel", "power bi"],
         "min_experience_years": 1,
     },
+    "data engineer": {
+        "required_skills": ["python", "sql", "docker"],
+        "min_experience_years": 2,
+    },
     "frontend developer": {
         "required_skills": ["javascript", "react", "git"],
         "min_experience_years": 2,
