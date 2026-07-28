@@ -5,6 +5,7 @@ Nơi khai báo tất cả các "món đồ nghề" mà ReAct Agent có thể g�
 
 import json
 import re
+from datetime import datetime
 
 
 # Dữ liệu mô phỏng để các tool chạy ổn định, không cần API hoặc Internet.
@@ -235,6 +236,26 @@ def _json_result(data: dict) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
+def _is_valid_email(value: object) -> bool:
+    """Kiểm tra email mà không phát sinh lỗi khi đầu vào sai kiểu."""
+    return (
+        isinstance(value, str)
+        and re.fullmatch(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", value) is not None
+    )
+
+
+def _is_valid_datetime(value: object, date_only: bool = False) -> bool:
+    """Kiểm tra ngày/giờ đúng định dạng và tồn tại trên lịch."""
+    if not isinstance(value, str):
+        return False
+    date_format = "%Y-%m-%d" if date_only else "%Y-%m-%d %H:%M"
+    try:
+        datetime.strptime(value, date_format)
+        return True
+    except ValueError:
+        return False
+
+
 def parse_candidate_profile(profile_text: str) -> str:
     """
     Trích xuất tên, email, kỹ năng và kinh nghiệm từ nội dung CV.
@@ -356,7 +377,11 @@ def evaluate_candidate(
             "status": "error",
             "message": "candidate_skills phải là danh sách chuỗi.",
         })
-    if not isinstance(experience_years, int) or experience_years < 0:
+    if (
+        not isinstance(experience_years, int)
+        or isinstance(experience_years, bool)
+        or experience_years < 0
+    ):
         return _json_result({
             "status": "error",
             "message": "experience_years phải là số nguyên không âm.",
@@ -426,13 +451,17 @@ def check_interview_slots(preferred_date: str = "") -> str:
     Side effect:
         Không có.
     """
-    if preferred_date and not re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}",
-        preferred_date,
-    ):
+    if not isinstance(preferred_date, str):
         return _json_result({
             "status": "error",
-            "message": "Ngày phải có định dạng YYYY-MM-DD.",
+            "message": "preferred_date phải là chuỗi.",
+        })
+    if preferred_date and not _is_valid_datetime(preferred_date, date_only=True):
+        return _json_result({
+            "status": "error",
+            "message": (
+                "Ngày phải có định dạng YYYY-MM-DD và tồn tại trên lịch."
+            ),
         })
 
     slots = [
@@ -472,18 +501,33 @@ def schedule_interview(
     Side effect:
         Xóa khung giờ khỏi danh sách lịch trống trong phiên hiện tại.
     """
+    if not isinstance(confirmed, bool):
+        return _json_result({
+            "status": "error",
+            "message": "confirmed phải là kiểu boolean.",
+        })
     if not confirmed:
         return _json_result({
             "status": "confirmation_required",
             "message": "Cần xác nhận trước khi đặt lịch phỏng vấn.",
         })
-    if not re.fullmatch(
-        r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}",
-        candidate_email,
-    ):
+    if not _is_valid_email(candidate_email):
         return _json_result({
             "status": "error",
             "message": "Email ứng viên không hợp lệ.",
+        })
+    if not isinstance(job_title, str) or not job_title.strip():
+        return _json_result({
+            "status": "error",
+            "message": "Tên vị trí không được để trống.",
+        })
+    if not _is_valid_datetime(slot):
+        return _json_result({
+            "status": "error",
+            "message": (
+                "Khung giờ phải có định dạng YYYY-MM-DD HH:MM "
+                "và là thời gian hợp lệ."
+            ),
         })
     if slot not in INTERVIEW_SLOTS:
         return _json_result({
@@ -522,18 +566,33 @@ def send_interview_invitation(
     Side effect:
         Chỉ mô phỏng, không gửi email thật.
     """
+    if not isinstance(confirmed, bool):
+        return _json_result({
+            "status": "error",
+            "message": "confirmed phải là kiểu boolean.",
+        })
     if not confirmed:
         return _json_result({
             "status": "confirmation_required",
             "message": "Cần xác nhận trước khi gửi thư mời.",
         })
-    if not re.fullmatch(
-        r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}",
-        candidate_email,
-    ):
+    if not _is_valid_email(candidate_email):
         return _json_result({
             "status": "error",
             "message": "Email ứng viên không hợp lệ.",
+        })
+    if not isinstance(job_title, str) or not job_title.strip():
+        return _json_result({
+            "status": "error",
+            "message": "Tên vị trí không được để trống.",
+        })
+    if not _is_valid_datetime(slot):
+        return _json_result({
+            "status": "error",
+            "message": (
+                "Thời gian phải có định dạng YYYY-MM-DD HH:MM "
+                "và tồn tại trên lịch."
+            ),
         })
 
     return _json_result({
@@ -558,6 +617,9 @@ def get_weather(location: str) -> str:
     Returns:
         str: Thông tin thời tiết chi tiết
     """
+    if not isinstance(location, str) or not location.strip():
+        return "LỖI: Địa điểm phải là chuỗi không rỗng."
+
     loc_lower = location.lower()
     if "hà nội" in loc_lower or "ha noi" in loc_lower:
         return "Thời tiết Hà Nội: 28°C, Nắng nhẹ, Độ ẩm 65%."
@@ -580,6 +642,13 @@ def search_flights(origin: str, destination: str) -> str:
     Returns:
         str: Danh sách chuyến bay khả dụng và giá vé
     """
+    if not isinstance(origin, str) or not origin.strip():
+        return "LỖI: Nơi đi phải là chuỗi không rỗng."
+    if not isinstance(destination, str) or not destination.strip():
+        return "LỖI: Nơi đến phải là chuỗi không rỗng."
+    if origin.strip().lower() == destination.strip().lower():
+        return "LỖI: Nơi đi và nơi đến phải khác nhau."
+
     return (
         f"Chuyến bay từ {origin} -> {destination} ngày mai:\n"
         f"1. VN123 (08:00) - Giá: 1,500,000 VNĐ (Còn vé)\n"
