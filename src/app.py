@@ -4,6 +4,7 @@ Core agent app for the recruitment screening and interview scheduling lab.
 
 from __future__ import annotations
 
+import argparse
 import ast
 import json
 import os
@@ -50,6 +51,14 @@ def load_test_cases():
 
     with open(config_path, "r", encoding="utf-8-sig") as f:
         return json.load(f)
+
+
+def find_test_case(tests: list[dict[str, Any]], case_id: int) -> dict[str, Any] | None:
+    """Return the test case whose ``id`` matches ``case_id``, or ``None``."""
+    for case in tests:
+        if case.get("id") == case_id:
+            return case
+    return None
 
 
 def run_baseline_chatbot(user_query: str, provider):
@@ -324,50 +333,105 @@ def _fallback_final_answer(user_query: str, history: list[dict[str, Any]]) -> st
     return None
 
 
-def run_react_agent(user_query: str, provider):
-    """Run a ReAct loop with tool execution and guardrails."""
-    print(f"\n🤖 [REACT AGENT] Câu hỏi: {user_query}")
+def iter_react_agent(user_query: str, provider):
+    """Run a ReAct loop, yielding structured events for streaming UIs.
+
+    Yields event dicts in order:
+        {"type": "query", "text": user_query}
+        {"type": "step", "step": N, "max": M}
+        {"type": "llm_response", "text": response}
+        {"type": "action", "tool": name, "args": <formatted>}
+        {"type": "observation", "text": observation}
+        {"type": "final_answer", "text": ...}   # terminal
+        {"type": "guardrail", "message": ...}    # terminal
+        {"type": "error", "message": ...}        # terminal
+    """
+    yield {"type": "query", "text": user_query}
     history: list[dict[str, Any]] = []
-    final_answer = None
 
-    for step in range(1, MAX_ITERATIONS + 1):
-        print(f"\n--- 🔄 Vòng lặp ReAct (Step {step}/{MAX_ITERATIONS}) ---")
-        prompt = _build_react_prompt(user_query, history)
-        response = provider.generate(prompt, system_prompt=REACT_SYSTEM_PROMPT)
-        print(response)
+    try:
+        for step in range(1, MAX_ITERATIONS + 1):
+            yield {"type": "step", "step": step, "max": MAX_ITERATIONS}
+            prompt = _build_react_prompt(user_query, history)
+            response = provider.generate(prompt, system_prompt=REACT_SYSTEM_PROMPT)
+            yield {"type": "llm_response", "text": response}
 
-        final_answer = _extract_final_answer(response)
-        if final_answer:
-            print(f"🏁 Final Answer: {final_answer}")
-            return final_answer
+            final_answer = _extract_final_answer(response)
+            if final_answer:
+                yield {"type": "final_answer", "text": final_answer}
+                return final_answer
 
-        tool_name, args = _extract_action(response)
-        if tool_name is None:
-            tool_name, args = _fallback_action(user_query, history)
+            tool_name, args = _extract_action(response)
+            if tool_name is None:
+                tool_name, args = _fallback_action(user_query, history)
 
-        if tool_name is None:
-            fallback_answer = _fallback_final_answer(user_query, history)
-            if fallback_answer:
-                print(f"🏁 Final Answer: {fallback_answer}")
-                return fallback_answer
+            if tool_name is None:
+                fallback_answer = _fallback_final_answer(user_query, history)
+                if fallback_answer:
+                    yield {"type": "final_answer", "text": fallback_answer}
+                    return fallback_answer
 
-            print("🛟 Không có Action hợp lệ. Dừng an toàn bằng câu trả lời tóm tắt.")
-            print(f"🏁 Final Answer: {response.strip()}")
-            return response.strip()
+                fallback_text = response.strip()
+                yield {"type": "final_answer", "text": fallback_text}
+                return fallback_text
 
-        print(f"🛠️ Action -> {tool_name}({_format_tool_call(tool_name, args)})")
-        observation = _execute_tool_call(tool_name, args)
-        print(f"👁️ Observation: {observation}")
-        history.append({"assistant": response, "observation": observation})
+            yield {
+                "type": "action",
+                "tool": tool_name,
+                "args": _format_tool_call(tool_name, args),
+            }
+            observation = _execute_tool_call(tool_name, args)
+            yield {"type": "observation", "text": observation}
+            history.append({"assistant": response, "observation": observation})
 
-    print(
-        f"🛡️ GUARDRAIL TRIGGERED: Đã đạt giới hạn tối đa {MAX_ITERATIONS} bước. "
-        "Ngắt lặp an toàn!"
-    )
-    return None
+        guardrail_msg = (
+            f"Đã đạt giới hạn tối đa {MAX_ITERATIONS} bước. Ngắt lặp an toàn!"
+        )
+        yield {"type": "guardrail", "message": guardrail_msg}
+        return None
+    except Exception as exc:
+        yield {"type": "error", "message": f"{exc}"}
+        return None
+
+
+def run_react_agent(user_query: str, provider):
+    """Run a ReAct loop with tool execution and guardrails (CLI version)."""
+    print(f"\n🤖 [REACT AGENT] Câu hỏi: {user_query}")
+    result = None
+    for event in iter_react_agent(user_query, provider):
+        etype = event["type"]
+        if etype == "query":
+            continue
+        if etype == "step":
+            print(f"\n--- 🔄 Vòng lặp ReAct (Step {event['step']}/{event['max']}) ---")
+        elif etype == "llm_response":
+            print(event["text"])
+        elif etype == "action":
+            print(f"🛠️ Action -> {event['tool']}({event['args']})")
+        elif etype == "observation":
+            print(f"👁️ Observation: {event['text']}")
+        elif etype == "final_answer":
+            print(f"🏁 Final Answer: {event['text']}")
+            result = event["text"]
+        elif etype == "guardrail":
+            print(f"🛡️ GUARDRAIL TRIGGERED: {event['message']}")
+        elif etype == "error":
+            print(f"❌ Error: {event['message']}")
+    return result
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Chạy demo Chatbot Baseline vs ReAct Agent cho test case theo id."
+    )
+    parser.add_argument(
+        "--id",
+        type=int,
+        default=4,
+        help="Test case id cần chạy (mặc định: 4). Xem config/test_cases.json.",
+    )
+    args = parser.parse_args()
+
     print("==================================================")
     print("🏫 ĐẠI HỌC VINUNI - BÀI LAB 3: CHATBOT VS REACT AGENT")
     print("==================================================")
@@ -382,7 +446,17 @@ if __name__ == "__main__":
     tests = load_test_cases()
     print(f"✅ Đã tải thành công {len(tests)} Test Cases từ config/test_cases.json\n")
 
-    sample_query = tests[3]["question"] if len(tests) > 3 else tests[-1]["question"]
+    case = find_test_case(tests, args.id)
+    if case is None:
+        available_ids = [case_item.get("id") for case_item in tests]
+        print(
+            f"⚠️ Không tìm thấy test case id={args.id}. "
+            f"Các id khả dụng: {available_ids}. Dùng test case mặc định (id=4)."
+        )
+        case = find_test_case(tests, 4) or (tests[3] if len(tests) > 3 else tests[-1])
+
+    print(f"📌 Đang chạy Test Case id={case.get('id')} | {case.get('category')}")
+    sample_query = case["question"]
 
     print("--- DEMO 1: CHẠY TRÊN CHATBOT BASELINE ---")
     run_baseline_chatbot(sample_query, provider)

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VinUni Lab 3 — ReAct Agent</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">🏫 VinUni Lab 3 — Chatbot vs ReAct Agent</div>
+    <div id="provider-badge" class="provider-badge" title="LLM provider đang hoạt động">…</div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">📋 Test Cases</div>
+      <div id="test-cases" class="test-cases">
+        <div class="muted">Đang tải…</div>
+      </div>
+    </aside>
+
+    <section class="main">
+      <div class="log-header">
+        <span>🧠 ReAct Agent Trace</span>
+        <button id="clear-btn" class="ghost-btn" type="button" title="Xóa log">Clear</button>
+      </div>
+      <div id="log" class="log" aria-live="polite"></div>
+
+      <form id="query-form" class="composer" autocomplete="off">
+        <input
+          id="query"
+          class="query-input"
+          type="text"
+          placeholder="Chọn test case bên trái hoặc gõ câu hỏi rồi nhấn Enter…"
+          autocomplete="off"
+        />
+        <button id="send-btn" class="send-btn" type="submit">
+          <span class="send-label">Send</span>
+          <span class="spinner" hidden></span>
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
