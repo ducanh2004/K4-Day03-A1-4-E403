@@ -14,15 +14,15 @@
 | **TỔNG ĐIỂM FIT** | **16/20** | **KẾT LUẬN: BÀI TOÁN RẤT NÊN DÙNG REACT AGENT!** |
 
 ---
-<!-- 
+
 ## 🔍 2. SO SÁNH PHẢN HỒI (TEST CASE #3)
 
-**Câu hỏi**: *"Thời tiết ở Hà Nội hôm nay thế nào và tôi nên mặc gì đi chơi?"*
+**Câu hỏi**: *"Ứng viên Minh có 3 năm kinh nghiệm Python, từng làm backend và đang muốn ứng tuyển vị trí Data Engineer. Hãy tóm tắt nhanh hồ sơ và cho biết mức độ phù hợp sơ bộ."*
 
 ### 🤖 Chatbot Baseline:
-* **Phản hồi**: *"Tôi không có truy cập Internet thời gian thực nên không biết thời tiết hôm nay ở Hà Nội."*
-* **Nhận xét**: An toàn nhưng không giải quyết được nhu cầu thực tế của người dùng.
-
+* **Phản hồi**: *"Ứng viên Minh có 3 năm kinh nghiệm Python, từng làm backend và đang muốn ứng tuyển vị trí Data Engineer. Hãy tóm tắt nhanh hồ sơ và cho biết mức độ phù hợp sơ bộ."*
+* **Nhận xét**: AI Agent cung cấp câu trả lời rõ ràng có đầy đủ cấu trúc, dễ dàng theo dõi, có gợi ý hành động tuyển dụng.
+<!-- 
 ### 🧠 ReAct Agent:
 * **Thought 1**: Cần tra cứu thời tiết Hà Nội.
 * **Action 1**: `get_weather['Hà Nội']`
