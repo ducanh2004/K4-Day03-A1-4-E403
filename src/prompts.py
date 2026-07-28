@@ -1,5 +1,6 @@
 """
-PROMPTS & SAFEGUARDS
+🧠 PROMPTS & SAFEGUARDS (Dành cho Role 3: Prompt & Safeguard Engineer)
+Nơi cấu hình System Prompt và Phanh An Toàn (Guardrails) cho AI.
 """
 
 # Baseline Chatbot Prompt (LLM-only, no tools)
