@@ -29,6 +29,206 @@ INTERVIEW_SLOTS = [
     "2026-08-04 10:30",
 ]
 
+# MÔ TẢ TOOL (TOOL SPECS)
+# Agent dùng thông tin này để biết khi nào gọi tool, truyền tham số gì
+# và kết quả/lỗi nào có thể được trả về.
+TOOL_SPECS = {
+    "parse_candidate_profile": {
+        "description": (
+            "Trích xuất tên, email, kỹ năng và số năm kinh nghiệm "
+            "từ CV dạng văn bản."
+        ),
+        "input_schema": {
+            "profile_text": {
+                "type": "string",
+                "required": True,
+                "description": "Nội dung CV của ứng viên.",
+            },
+        },
+        "output_schema": {
+            "type": "json_string",
+            "fields": [
+                "status",
+                "name",
+                "email",
+                "skills",
+                "experience_years",
+            ],
+        },
+        "error_semantics": "Trả status='error' nếu hồ sơ rỗng.",
+        "side_effect": False,
+    },
+    "get_job_requirements": {
+        "description": (
+            "Tra cứu kỹ năng và số năm kinh nghiệm tối thiểu "
+            "của một vị trí tuyển dụng."
+        ),
+        "input_schema": {
+            "job_title": {
+                "type": "string",
+                "required": True,
+                "description": "Tên vị trí cần tra cứu.",
+            },
+        },
+        "output_schema": {
+            "type": "json_string",
+            "fields": [
+                "status",
+                "job_title",
+                "required_skills",
+                "min_experience_years",
+            ],
+        },
+        "error_semantics": (
+            "Trả status='error' nếu tên vị trí rỗng hoặc không tồn tại."
+        ),
+        "side_effect": False,
+    },
+    "evaluate_candidate": {
+        "description": (
+            "Đối chiếu kỹ năng, kinh nghiệm của ứng viên với yêu cầu "
+            "công việc và đưa ra điểm phù hợp."
+        ),
+        "input_schema": {
+            "candidate_skills": {
+                "type": "array[string]",
+                "required": True,
+                "description": "Danh sách kỹ năng của ứng viên.",
+            },
+            "experience_years": {
+                "type": "integer",
+                "minimum": 0,
+                "required": True,
+                "description": "Số năm kinh nghiệm.",
+            },
+            "job_title": {
+                "type": "string",
+                "required": True,
+                "description": "Vị trí cần đánh giá.",
+            },
+        },
+        "output_schema": {
+            "type": "json_string",
+            "fields": [
+                "status",
+                "score",
+                "matched_skills",
+                "missing_skills",
+                "experience",
+                "recommendation",
+            ],
+        },
+        "error_semantics": (
+            "Trả status='error' khi sai kiểu dữ liệu, kinh nghiệm âm "
+            "hoặc vị trí không tồn tại."
+        ),
+        "side_effect": False,
+    },
+    "check_interview_slots": {
+        "description": "Tra cứu các khung giờ phỏng vấn còn trống.",
+        "input_schema": {
+            "preferred_date": {
+                "type": "string",
+                "format": "YYYY-MM-DD",
+                "required": False,
+                "description": "Ngày muốn phỏng vấn; để trống để xem tất cả.",
+            },
+        },
+        "output_schema": {
+            "type": "json_string",
+            "fields": ["status", "available_slots", "message"],
+        },
+        "error_semantics": (
+            "Trả status='error' nếu ngày không đúng định dạng YYYY-MM-DD."
+        ),
+        "side_effect": False,
+    },
+    "schedule_interview": {
+        "description": (
+            "Đặt lịch phỏng vấn vào một khung giờ còn trống. "
+            "Chỉ gọi sau khi người dùng xác nhận."
+        ),
+        "input_schema": {
+            "candidate_email": {
+                "type": "string",
+                "format": "email",
+                "required": True,
+            },
+            "job_title": {
+                "type": "string",
+                "required": True,
+            },
+            "slot": {
+                "type": "string",
+                "format": "YYYY-MM-DD HH:MM",
+                "required": True,
+            },
+            "confirmed": {
+                "type": "boolean",
+                "required": True,
+                "description": "Phải là true sau xác nhận của người dùng.",
+            },
+        },
+        "output_schema": {
+            "type": "json_string",
+            "fields": [
+                "status",
+                "candidate_email",
+                "job_title",
+                "slot",
+                "message",
+            ],
+        },
+        "error_semantics": (
+            "Trả confirmation_required nếu chưa xác nhận; trả error "
+            "nếu email sai hoặc lịch không còn trống."
+        ),
+        "side_effect": True,
+    },
+    "send_interview_invitation": {
+        "description": (
+            "Tạo và mô phỏng gửi thư mời phỏng vấn. "
+            "Chỉ gọi sau khi người dùng xác nhận."
+        ),
+        "input_schema": {
+            "candidate_email": {
+                "type": "string",
+                "format": "email",
+                "required": True,
+            },
+            "job_title": {
+                "type": "string",
+                "required": True,
+            },
+            "slot": {
+                "type": "string",
+                "format": "YYYY-MM-DD HH:MM",
+                "required": True,
+            },
+            "confirmed": {
+                "type": "boolean",
+                "required": True,
+                "description": "Phải là true sau xác nhận của người dùng.",
+            },
+        },
+        "output_schema": {
+            "type": "json_string",
+            "fields": [
+                "status",
+                "recipient",
+                "subject",
+                "body",
+                "message",
+            ],
+        },
+        "error_semantics": (
+            "Trả confirmation_required nếu chưa xác nhận; "
+            "trả error nếu email không hợp lệ."
+        ),
+        "side_effect": True,
+    },
+}
+
 
 def _json_result(data: dict) -> str:
     """Chuyển kết quả tool thành JSON để Agent dễ đọc."""
